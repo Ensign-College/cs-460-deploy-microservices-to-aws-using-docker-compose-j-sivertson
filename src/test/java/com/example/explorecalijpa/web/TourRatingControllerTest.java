@@ -12,6 +12,7 @@ import static org.springframework.boot.test.context.SpringBootTest.WebEnvironmen
 import java.util.List;
 import java.util.NoSuchElementException;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mock;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -40,6 +41,9 @@ public class TourRatingControllerTest {
   @Autowired
   private TestRestTemplate restTemplate;
 
+  private TestRestTemplate userRestTemplate;
+  private TestRestTemplate adminRestTemplate;
+
   @MockBean
   private TourRatingService serviceMock;
 
@@ -51,10 +55,16 @@ public class TourRatingControllerTest {
 
   private RatingDto ratingDto = new RatingDto(SCORE, COMMENT,CUSTOMER_ID);
 
+  @BeforeEach
+  void setUp() {
+    this.userRestTemplate = restTemplate.withBasicAuth("user", "password");
+    this.adminRestTemplate = restTemplate.withBasicAuth("admin", "admin123");
+  }
+
   @Test
   void testCreateTourRating() {
 
-    restTemplate.postForEntity(TOUR_RATINGS_URL, ratingDto, RatingDto.class);
+    adminRestTemplate.postForEntity(TOUR_RATINGS_URL, ratingDto, RatingDto.class);
 
     verify(this.serviceMock).createNew(TOUR_ID, CUSTOMER_ID, SCORE, COMMENT);
   }
@@ -62,7 +72,7 @@ public class TourRatingControllerTest {
   @Test
   void testDelete() {
 
-    restTemplate.delete(TOUR_RATINGS_URL + "/" + CUSTOMER_ID);
+    adminRestTemplate.delete(TOUR_RATINGS_URL + "/" + CUSTOMER_ID);
 
     verify(this.serviceMock).delete(TOUR_ID, CUSTOMER_ID);
   }
@@ -70,7 +80,7 @@ public class TourRatingControllerTest {
   @Test
   void testGetAllRatingsForTour() {
     when(serviceMock.lookupRatings(anyInt())).thenReturn(List.of(tourRatingMock));
-    ResponseEntity<String> res = restTemplate.getForEntity(TOUR_RATINGS_URL, String.class);
+    ResponseEntity<String> res = userRestTemplate.getForEntity(TOUR_RATINGS_URL, String.class);
   
     assertThat(res.getStatusCode(), is(HttpStatus.OK));
     verify(serviceMock).lookupRatings(anyInt());
@@ -79,7 +89,7 @@ public class TourRatingControllerTest {
   @Test
   void testGetAverage() {
     when(serviceMock.lookupRatings(anyInt())).thenReturn(List.of(tourRatingMock));
-    ResponseEntity<String> res = restTemplate.getForEntity(TOUR_RATINGS_URL + "/average", String.class);
+    ResponseEntity<String> res = userRestTemplate.getForEntity(TOUR_RATINGS_URL + "/average", String.class);
 
     assertThat(res.getStatusCode(), is(HttpStatus.OK));
     verify(serviceMock).getAverageScore(TOUR_ID);
@@ -92,13 +102,13 @@ public class TourRatingControllerTest {
   void testUpdateWithPatch() {
     when(serviceMock.updateSome(anyInt(), anyInt(), any(), any())).thenReturn(tourRatingMock);
 
-    restTemplate.patchForObject(TOUR_RATINGS_URL, ratingDto, String.class);
+    adminRestTemplate.patchForObject(TOUR_RATINGS_URL, ratingDto, String.class);
     verify(this.serviceMock).updateSome(anyInt(), anyInt(), any(), any());
   }
 
   @Test
   void testUpdateWithPut() {
-    restTemplate.put(TOUR_RATINGS_URL, ratingDto);
+    adminRestTemplate.put(TOUR_RATINGS_URL, ratingDto);
 
     verify(this.serviceMock).update(TOUR_ID, CUSTOMER_ID, SCORE, COMMENT);
   }
@@ -106,7 +116,7 @@ public class TourRatingControllerTest {
   @Test
   void testCreateManyTourRatings() {
     Integer customers[] = {123}; 
-    restTemplate.postForObject(TOUR_RATINGS_URL + "/batch?score=" + SCORE, customers,
+    adminRestTemplate.postForObject(TOUR_RATINGS_URL + "/batch?score=" + SCORE, customers,
     String.class);
 
     verify(serviceMock).rateMany(anyInt(), anyInt(), anyList());
@@ -117,7 +127,7 @@ public class TourRatingControllerTest {
   @Test
   public void test404() {
     when(serviceMock.lookupRatings(anyInt())).thenThrow(new NoSuchElementException());
-    ResponseEntity<String> res = restTemplate.getForEntity(TOUR_RATINGS_URL, String.class);
+    ResponseEntity<String> res = userRestTemplate.getForEntity(TOUR_RATINGS_URL, String.class);
   
     assertThat(res.getStatusCode(), is(HttpStatus.NOT_FOUND));
   }
@@ -125,8 +135,15 @@ public class TourRatingControllerTest {
   @Test
   public void test400() {
     when(serviceMock.lookupRatings(anyInt())).thenThrow(new ConstraintViolationException(null));
-    ResponseEntity<String> res = restTemplate.getForEntity(TOUR_RATINGS_URL, String.class);
+    ResponseEntity<String> res = userRestTemplate.getForEntity(TOUR_RATINGS_URL, String.class);
 
     assertThat(res.getStatusCode(), is(HttpStatus.BAD_REQUEST));
+  }
+
+  @Test
+  public void testUserCannotCreateRating() {
+    ResponseEntity<String> res = userRestTemplate.postForEntity(TOUR_RATINGS_URL, ratingDto, String.class);
+    
+    assertThat(res.getStatusCode(), is(HttpStatus.FORBIDDEN));
   }
 }
