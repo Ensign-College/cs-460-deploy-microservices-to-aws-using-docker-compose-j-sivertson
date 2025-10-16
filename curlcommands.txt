@@ -12,18 +12,55 @@ curl -i -u admin:admin123 -X POST http://localhost:8080/packages \
 # Delete the tour package (admin only)
 curl -i -u admin:admin123 -X DELETE http://localhost:8080/packages/BB
 
-# Tour ratings - GET (authenticated user)
+# =============================================================================
+# TOUR RATINGS API ENDPOINTS (with Feature Flag Support)
+# =============================================================================
+
+# Feature Flag: Tour ratings are enabled by default (features.tour-ratings=true)
+# To disable: mvn spring-boot:run -Dspring-boot.run.arguments="--features.tour-ratings=false"
+
+# GET all ratings for a tour (authenticated user)
 curl -i -u user:password http://localhost:8080/tours/1/ratings
 
-# Tour ratings - POST (admin only)
+# GET average rating for a tour (authenticated user)
+curl -i -u user:password http://localhost:8080/tours/1/ratings/average
+
+# POST create a new rating (admin only)
 curl -i -u admin:admin123 -X POST http://localhost:8080/tours/1/ratings \
   -H 'Content-Type: application/json' \
   -d '{"score":5,"comment":"Great tour!","customerId":123}'
+
+# PUT update a rating (admin only) - updates all fields
+curl -i -u admin:admin123 -X PUT http://localhost:8080/tours/1/ratings \
+  -H 'Content-Type: application/json' \
+  -d '{"score":4,"comment":"Updated comment","customerId":123}'
+
+# PATCH partial update a rating (admin only) - updates only provided fields
+curl -i -u admin:admin123 -X PATCH http://localhost:8080/tours/1/ratings \
+  -H 'Content-Type: application/json' \
+  -d '{"score":3,"customerId":123}'
+
+# DELETE a rating (admin only)
+curl -i -u admin:admin123 -X DELETE http://localhost:8080/tours/1/ratings/123
+
+# POST batch create ratings (admin only) - same score for multiple customers
+curl -i -u admin:admin123 -X POST http://localhost:8080/tours/1/ratings/batch?score=5 \
+  -H 'Content-Type: application/json' \
+  -d '[456, 789, 101]'
 
 # Test user cannot create rating (should return 403)
 curl -i -u user:password -X POST http://localhost:8080/tours/1/ratings \
   -H 'Content-Type: application/json' \
   -d '{"score":5,"comment":"Great tour!","customerId":123}'
+
+# =============================================================================
+# FEATURE FLAG TESTING
+# =============================================================================
+
+# Test with feature flag DISABLED (should return 404 for all rating endpoints)
+# Start app with: mvn spring-boot:run -Dspring-boot.run.arguments="--features.tour-ratings=false"
+curl -i -u user:password http://localhost:8080/tours/1/ratings
+# Expected: 404 Not Found with "Tour ratings feature disabled"
 
 # Public endpoints (no authentication required)
 curl -i http://localhost:8080/actuator/health
